@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Platform</title>
+        <style type="text/css">
+        body,html {
+            margin : 0;
+            padding: 0;
+            scroll-behavior: smooth;
+            font-family: monospace;
+        }
+        .child{
+            margin-left:auto;
+            margin-right:auto;
+            text-align: center;
+        }
+        .tb{
+            width:200px;
+        }
+        .tbTitle{
+            width:100px;
+        }
+        table{
+            border-collapse: collapse;
+        }
+        table,td{
+            border:1px solid black;
+        }
+        </style>
+        <script>
+            //https://oauth.dicom.org.tw/fhir/Observation?patient=1841904&specimen=1841905
+            //&component-code-value-concept=http://loinc.org/|48018-6$HGNC:14825
+            var doneFetching = false;
+            var List=[];
+            var PatientText;
+            var SpecimenText;
+            var GeneSym;
+            function SearchClicked(){
+                doneFetching = false;
+                List=[];
+                document.getElementById('result').textContent="";
+                var theUrl="http://192.168.50.5:10050/api/Observation?";
+                 PatientText = document.getElementById('PatientID').value;
+                 SpecimenText = document.getElementById('SpecimenID').value;
+                 GeneSym = document.getElementById('GeneSymbol').value;                
+                if(PatientText == "" && SpecimenText == "" && GeneSym==""){//not all blank
+                    alert("Please insert slots");
+                }
+                else if(PatientText != "" && SpecimenText == "" && GeneSym==""){
+                    //search Patient resource
+                    theUrl="http://192.168.50.5:10050/api/Patient/"+PatientText;
+                    var request = new XMLHttpRequest();
+                    request.open("GET",theUrl);
+                    request.setRequestHeader("authorization", "Bearer d214cdee-9783-43e1-a7e8-63c2b17010fd");
+                    request.onreadystatechange = function () {
+                        if (request.readyState == 4 && request.status == 200) {
+                            document.getElementById('r1').textContent = request.responseText;
+                            var pat = JSON.parse(request.responseText);
+                            var patID = pat.id;
+                            theUrl="http://192.168.50.5:10050/api/Specimen?patient="+patID;
+                            var r1 = new XMLHttpRequest();
+                            r1.open("GET",theUrl);
+                            r1.setRequestHeader("authorization", "Bearer d214cdee-9783-43e1-a7e8-63c2b17010fd");
+                            r1.onreadystatechange = function(){
+                                if (r1.readyState == 4 && r1.status == 200) {
+                                    document.getElementById('r2').textContent = r1.responseText;
+                                }
+                            }
+                            r1.send(null);
+                        }
+                    };
+                    request.send(null);
+                }
+                else if(PatientText == "" && SpecimenText != "" && GeneSym==""){
+                    //search Specimen resource
+                    theUrl="http://192.168.50.5:10050/api/Specimen/"+SpecimenText;
+                    var request = new XMLHttpRequest();
+                    request.open("GET",theUrl);
+                    request.setRequestHeader("authorization", "Bearer d214cdee-9783-43e1-a7e8-63c2b17010fd");
+                    request.onreadystatechange = function () {
+                        if (request.readyState == 4 && request.status == 200) {
+                            document.getElementById('result').textContent = request.responseText;
+                        }
+                    };
+                    request.send(null);
+                }
+                else{
+                    if(GeneSym!=""){
+                        var SubUrl= "component-code-value-concept=http%3A%2F%2Floinc.org%7C48018-6%24";
+                        var strArr = GeneSym.split(':');
+                        for(i=0;i<strArr.length;i++){
+                            if(i==0)SubUrl+=strArr[i]+"%3A";
+                            else SubUrl+=strArr[i];
+                        }
+                        theUrl += SubUrl;
+                    }
+                    if(PatientText!="")theUrl+="&patient="+PatientText;
+                    if(SpecimenText!="")theUrl+="&specimen="+SpecimenText;
+                    //console.log(theUrl);
+                    requesting(theUrl);
+                }
+            }
+
+            function requesting(theUrl){
+                //start getting value from server
+                var request = new XMLHttpRequest();
+                console.log(theUrl);
+                    request.open("GET",theUrl);
+                    request.setRequestHeader("authorization", "Bearer d214cdee-9783-43e1-a7e8-63c2b17010fd");
+                    request.onreadystatechange = function () {
+                        if (request.readyState == 4 && request.status == 200) {
+                            var receivedData = JSON.parse(request.responseText);
+                            if(receivedData.entry!=null){
+                                for(i=0;i<receivedData.entry.length;i++){
+                                    List.push(receivedData.entry[i].resource);
+                                }
+                                doneFetching=true;
+                                for(i=0;i<receivedData.link.length;i++){
+                                    var temp=receivedData.link[i];
+                                    if(temp.relation == "next"){
+                                        theUrl = temp.url;
+                                        doneFetching=false;
+                                    }
+                                }
+                                if(!doneFetching){
+                                    requesting(theUrl);
+                                }
+                                else{
+                                    console.log(List[0]);
+                                    console.log(JSON.stringify(List[0]));
+                                    var strBuffer=`<table><tr><th>id</th><th>resourceType</th>
+                                        <th>status</th><th>category</th><th>code</th><th>subject</th>
+                                        <th>specimen</th><th>effectiveDateTime</th><th>valueCodeableConcept</th><th>method</th><th>component</th></tr>`;
+                                    for(i=0;i<List.length;i++){
+                                        strBuffer+="<tr><td>"+List[i].id+"</td><td>"+List[i].resourceType+"</td><td>"+List[i].status+"</td><td>"+JSON.stringify(List[i].category)+"</td><td>"+JSON.stringify(List[i].code)+"</td>";
+                                        strBuffer+="<td>"+JSON.stringify(List[i].subject)+"</td><td>"+JSON.stringify(List[i].specimen)+"</td><td>"+List[i].effectiveDateTime+"</td>";
+                                        strBuffer+="<td>"+JSON.stringify(List[i].valueCodeableConcept)+"</td><td>"+JSON.stringify(List[i].method)+"</td><td>"+JSON.stringify(List[i].component)+"</td></tr>"
+                                    }
+                                    strBuffer+="</table>"
+                                    document.getElementById('result').innerHTML=strBuffer;
+                                    document.getElementById('Resultlbl').innerText = "Result : "+List.length;
+                                    theUrl="http://192.168.50.5:10050/api/Patient/"+PatientText;
+                                    var request1 = new XMLHttpRequest();
+                                    request1.open("GET",theUrl);
+                                    request1.setRequestHeader("authorization", "Bearer d214cdee-9783-43e1-a7e8-63c2b17010fd");
+                                    request1.onreadystatechange = function () {
+                                        if (request1.readyState == 4 && request1.status == 200) {
+                                            document.getElementById('r1').textContent = request1.responseText;
+                                            var pat = JSON.parse(request1.responseText);
+                                            var patID = pat.id;
+                                            theUrl="http://192.168.50.5:10050/api/Specimen?patient="+patID;
+                                            var r1 = new XMLHttpRequest();
+                                            r1.open("GET",theUrl);
+                                            r1.setRequestHeader("authorization", "Bearer d214cdee-9783-43e1-a7e8-63c2b17010fd");
+                                            r1.onreadystatechange = function(){
+                                                if (r1.readyState == 4 && r1.status == 200) {
+                                                    document.getElementById('r2').textContent = r1.responseText;
+                                                }
+                                            }
+                                            r1.send(null);
+                                        }
+                                    };
+                                    request1.send(null);
+                                }
+                            }
+                            else{
+                                alert("No record");
+                            }
+                        }
+                    };
+                    request.send(null);
+            }
+
+            function Reset(){
+                document.getElementById('PatientID').value = "";
+                document.getElementById('SpecimenID').value= "";
+                document.getElementById('GeneSymbol').value= "";
+                document.getElementById('result').textContent="";
+                document.getElementById('Resultlbl').innerText = "Result : ";
+            }
+        </script>
+    </head>
+    <body>
+        <div>
+            <div class="child">
+                <p><label class="tbTitle">Patient ID : </label><input type="text" class="tb" name="PID" id="PatientID"></p>
+                <p><label class="tbTitle">Specimen ID : </label><input type="text" class="tb" name="SID" id="SpecimenID"></p>
+                <p><label class="tbTitle">Gene Symbol : </label><input type="text" class="tb" name="Gene" id="GeneSymbol"></p>
+                <p>
+                    <button onclick="SearchClicked()">Search</button>
+                    <button onclick="Reset()">Reset</button>
+                </p>
+            </div>
+            <hr>
+            <div class="child">
+                <p><label class="tbTitle" id="Resultlbl">Result : </label></p>
+                <span id="result"></span>
+                <br>
+                <span id="r1"></span>
+                <br>
+                <br>
+                <span id="r2"></span>
+            </div>
+        </div>
+    </body>
+</html>
