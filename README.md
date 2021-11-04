@@ -15,8 +15,8 @@ Track#1 , Track#6
     - 透過輸入病人ID , Specimen ID, component-code-value 查詢特定病人在特定樣本下的基因定序Observation resource 資料
 
 通過項目:
--MolecularSequence creator
--Observation creator
+-MolecularSequence creator(MOL_Creator)
+-Observation creator(VAR_Creator)
 -Observation consumer
 
 未來發展項目:
